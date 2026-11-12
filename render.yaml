@@ -3,7 +3,7 @@ services:
     name: grocergo
     env: node
     plan: free
-    buildCommand: npm --prefix customer-frontend install && npm --prefix backend install && npm --prefix customer-frontend run build && npm --prefix backend run build
+    buildCommand: npm --prefix customer-frontend install --include=dev && npm --prefix backend install --include=dev && npm --prefix backend run db:generate && npm --prefix customer-frontend run build && npm --prefix backend run build
     startCommand: node backend/dist/server.js
     envVars:
       - key: NODE_ENV
