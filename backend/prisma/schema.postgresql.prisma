@@ -1,0 +1,262 @@
+// GrocerGo Prisma Schema - PostgreSQL Production Target
+// For PostgreSQL production deployment, set DATABASE_URL in .env:
+// DATABASE_URL="postgresql://user:password@host:5432/grocergodb?schema=public"
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String              @id @default(uuid())
+  email             String              @unique
+  passwordHash      String
+  name              String
+  phone             String              @unique
+  role              String              @default("CUSTOMER") // "CUSTOMER" | "ADMIN"
+  preferredLanguage String              @default("en")       // "en" | "ta" | "hi" | "te" | "kn" | "ml"
+  villageTown       String?
+  address           String?
+  landmark          String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  addresses         Address[]
+  orders            Order[]
+  cart              Cart?
+  inventoryMovements InventoryMovement[]
+  auditLogs         AuditLog[]
+
+  @@index([role])
+}
+
+model Address {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  streetAddress String
+  villageTown  String
+  landmark     String?
+  pincode      String
+  isDefault    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Category {
+  id           String                @id @default(uuid())
+  name         String                @unique
+  slug         String                @unique
+  description  String?
+  imageUrl     String?
+  isActive     Boolean               @default(true)
+  sortOrder    Int                   @default(0)
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  products     Product[]
+  translations CategoryTranslation[]
+
+  @@index([slug])
+  @@index([isActive])
+}
+
+model CategoryTranslation {
+  id          String   @id @default(uuid())
+  categoryId  String
+  category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  language    String   // "ta", "hi", "te", "kn", "ml"
+  name        String
+  description String?
+
+  @@unique([categoryId, language])
+  @@index([language])
+}
+
+model Product {
+  id              String               @id @default(uuid())
+  sku             String               @unique
+  name            String
+  slug            String               @unique
+  description     String
+  categoryId      String
+  category        Category             @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  price           Float                // Current selling price in INR
+  originalPrice   Float?               // MRP / Original price in INR
+  discountPercent Float                @default(0)
+  unit            String               // e.g. "kg", "g", "L", "ml", "pack", "pcs"
+  packSize        String               // e.g. "1 kg", "500 g", "1 L", "Pack of 4"
+  stock           Int                  @default(0)
+  imageUrl        String?
+  isFeatured      Boolean              @default(false)
+  isActive        Boolean              @default(true)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  translations    ProductTranslation[]
+  cartItems       CartItem[]
+  inventoryLogs   InventoryMovement[]
+
+  @@index([categoryId])
+  @@index([isFeatured])
+  @@index([isActive])
+}
+
+model ProductTranslation {
+  id          String   @id @default(uuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  language    String   // "ta", "hi", "te", "kn", "ml"
+  name        String
+  description String?
+
+  @@unique([productId, language])
+  @@index([language])
+}
+
+model Cart {
+  id        String     @id @default(uuid())
+  userId    String?    @unique
+  user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId String?    @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  items     CartItem[]
+}
+
+model CartItem {
+  id        String   @id @default(uuid())
+  cartId    String
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([cartId, productId])
+}
+
+model Order {
+  id             String               @id @default(uuid())
+  orderNumber    String               @unique
+  userId         String
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
+  subtotal       Float
+  deliveryCharge Float                @default(0)
+  discount       Float                @default(0)
+  total          Float
+  paymentStatus  String               @default("Awaiting Payment")
+  orderStatus    String               @default("Pending Confirmation")
+  customerName   String
+  customerPhone  String
+  deliveryAddress String
+  villageTown    String?
+  landmark       String?
+  notes          String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  items          OrderItem[]
+  paymentProofs  PaymentProof[]
+  statusHistory  OrderStatusHistory[]
+
+  @@index([userId])
+  @@index([paymentStatus])
+  @@index([orderStatus])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id          String   @id @default(uuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String
+  productName String
+  unit        String
+  packSize    String
+  price       Float
+  quantity    Int
+  total       Float
+
+  @@index([orderId])
+}
+
+model PaymentProof {
+  id              String    @id @default(uuid())
+  orderId         String
+  order           Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  imageUrl        String
+  transactionRef  String?
+  status          String    @default("Proof Submitted")
+  rejectionReason String?
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([orderId])
+  @@index([status])
+}
+
+model PaymentSettings {
+  id          String   @id @default("default-settings")
+  qrImageUrl  String?
+  upiId       String   @default("grocergo@upi")
+  accountName String   @default("GrocerGo Rural Direct")
+  instructions String  @default("Scan QR code using GPay, PhonePe, Paytm, or BHIM. Pay the exact order amount, take a screenshot of the completed payment, and upload it with the 12-digit UTR reference number.")
+  isActive    Boolean  @default(true)
+  updatedAt   DateTime @updatedAt
+}
+
+model InventoryMovement {
+  id             String   @id @default(uuid())
+  productId      String
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantityChange Int
+  quantityBefore Int
+  quantityAfter  Int
+  reason         String
+  userId         String?
+  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt      DateTime @default(now())
+
+  @@index([productId])
+  @@index([createdAt])
+}
+
+model OrderStatusHistory {
+  id         String   @id @default(uuid())
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fromStatus String
+  toStatus   String
+  note       String?
+  changedBy  String?
+  createdAt  DateTime @default(now())
+
+  @@index([orderId])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  entity    String
+  entityId  String?
+  details   String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([entity])
+}
